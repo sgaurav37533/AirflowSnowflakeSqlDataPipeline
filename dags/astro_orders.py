@@ -28,6 +28,13 @@ def join_orders_customers(input_table: Table):
     FROM {{filtered_orders_table}} f JOIN {{customers_table}} c ON f.customer_id = c.customer_id"""
 
 
+@aql.dataframe
+def transform_dataframe(df: DataFrame):
+    purchase_dates = df.loc[:, "purchase_date"]
+    print("purchase dates:", purchase_dates)
+    return purchase_dates
+
+
 with DAG(dag_id='astro_orders', start_date=datetime(2020, 1, 1), schedule='@daily', catchup=False):
     orders_data = aql.load_file(
         input_file=File(
@@ -43,3 +50,18 @@ with DAG(dag_id='astro_orders', start_date=datetime(2020, 1, 1), schedule='@dail
 
     joined_data = join_orders_customers(
         filter_orders(orders_data), customers_table)
+
+    reporting_table = aql.merge(
+        target_table=Table(
+            name=SNOWFLAKE_REPORTING,
+            conn_id=SNOWFLAKE_CONN_ID,
+        ),
+        source_table=joined_data,
+        target_conflict_columns=["order_id"],
+        columns=["customer_id", "customer_name"],
+        if_conflicts="update",
+    )
+
+    purchase_dates = transform_dataframe(reporting_table)
+
+    purchase_dates >> aql.cleanup()
