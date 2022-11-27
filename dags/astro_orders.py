@@ -1,6 +1,8 @@
 from datetime import datetime
 
 from airflow.models import DAG
+
+from airflow.decorators import dag, task
 from pandas import DataFrame
 
 from astro import sql as aql
@@ -35,7 +37,9 @@ def transform_dataframe(df: DataFrame):
     return purchase_dates
 
 
-with DAG(dag_id='astro_orders', start_date=datetime(2020, 1, 1), schedule='@daily', catchup=False):
+@dag(dag_id='astro_orders', start_date=datetime(2020, 1, 1), schedule='@daily', catchup=False)
+def astro_orders():
+
     orders_data = aql.load_file(
         input_file=File(
             path=S3_FILE_PATH+"/orders_data_header.csv", conn_id=S3_CONN_ID
@@ -65,3 +69,6 @@ with DAG(dag_id='astro_orders', start_date=datetime(2020, 1, 1), schedule='@dail
     purchase_dates = transform_dataframe(reporting_table)
 
     purchase_dates >> aql.cleanup()
+
+
+dag = astro_orders()
